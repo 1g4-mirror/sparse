@@ -413,11 +413,56 @@ static struct symbol *bad_expr_type(struct expression *expr)
 	return expr->ctype = &bad_ctype;
 }
 
+static bool expand_simple_constant(struct expression *expr, struct symbol *type)
+{
+	unsigned long long val, mask;
+	struct expression *pre;
+	struct symbol *ctype;
+	unsigned size;
+
+	if (expr->type != EXPR_PREOP)
+		return false;
+	pre = expr->unop;
+	if (pre->type != EXPR_VALUE)
+		return false;
+
+	ctype = pre->ctype;
+	if (!ctype || ctype != type)
+		return false;
+
+	size = ctype->bit_size;
+	if (!size)
+		return false;
+
+	mask = sign_bit(size);
+	switch (expr->op) {
+	case '+':
+		val = pre->value;
+		break;
+	case '-':
+		val = pre->value;
+		if (val == mask && !(ctype->ctype.modifiers & MOD_UNSIGNED))
+			return false;
+		val = -val;
+		break;
+	case '~':
+		val = pre->value;
+		val = ~val;
+		break;
+	default:
+		return false;
+	}
+	expr->op = 0;
+	expr->type = EXPR_VALUE;
+	expr->value = val & bits_mask(size);
+	return true;
+}
+
 static int restricted_value(struct expression *v, struct symbol *type)
 {
 	if (v->type != EXPR_VALUE)
 		return 1;
-	if (v->value != 0 && v->value != bits_mask(type->bit_size))
+	if (v->value != 0 && v->value != bits_mask(v->ctype->bit_size))
 		return 1;
 	return 0;
 }
@@ -1919,6 +1964,7 @@ Normal:
 	if (!(class & TYPE_FLOAT)) {
 		ctype = integer_promotion(ctype);
 		expr->unop = cast_to(expr->unop, ctype);
+		expand_simple_constant(expr, ctype);
 	} else if (expr->op != '~') {
 		/* no conversions needed */
 	} else {

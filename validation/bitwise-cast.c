@@ -48,6 +48,19 @@ static __be32 bar1(void)
 	return (__be32)0xffffffff;
 }
 
+/* Implicit casts of minus one, legal */
+static __be32 foom(void)
+{
+	__be32 x = -1;
+	return x;
+}
+
+/* Explicit cast of minus one, legal */
+static __be32 barm(void)
+{
+	return (__be32)-1;
+}
+
 /*
  * check-name: conversions to bitwise types
  * check-command: sparse -Wbitwise $file
