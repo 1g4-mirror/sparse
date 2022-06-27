@@ -35,6 +35,19 @@ static __be32 quuy(void)
 	return (__attribute__((force)) __be32) 1730;
 }
 
+/* Implicit casts of all ones, legal */
+static __be32 foo1(void)
+{
+	__be32 x = 0xffffffff;
+	return x;
+}
+
+/* Explicit cast of all ones, legal */
+static __be32 bar1(void)
+{
+	return (__be32)0xffffffff;
+}
+
 /*
  * check-name: conversions to bitwise types
  * check-command: sparse -Wbitwise $file

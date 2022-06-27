@@ -417,7 +417,7 @@ static int restricted_value(struct expression *v, struct symbol *type)
 {
 	if (v->type != EXPR_VALUE)
 		return 1;
-	if (v->value != 0)
+	if (v->value != 0 && v->value != bits_mask(type->bit_size))
 		return 1;
 	return 0;
 }
