@@ -8,7 +8,6 @@ static int gtu(bs32 x, bs32 y)  { return (x >  y); }
 /*
  * check-name: bitwise-cmps
  * check-command: test-linearize -Wno-decl $file
- * check-known-to-fail
  *
  * check-output-ignore
  * check-output-excludes: setb\\.

@@ -28,5 +28,4 @@ static int gtx(b32 x, b32 y)  { return (x >  y); }
 
 /*
  * check-name: bitwise-cmp
- * check-known-to-fail
  */

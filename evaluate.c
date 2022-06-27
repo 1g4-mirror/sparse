@@ -435,6 +435,10 @@ static int restricted_binop(int op, struct symbol *type)
 		case '^':
 		case '?':
 			return 2;	/* keep fouled */
+		case '<':
+		case '>':
+		case SPECIAL_LTE:
+		case SPECIAL_GTE:
 		case SPECIAL_EQUAL:
 		case SPECIAL_NOTEQUAL:
 			return 3;	/* warn if fouled */
