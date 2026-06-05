@@ -1106,8 +1106,13 @@ static struct token *autotype_specifier(struct token *token, struct symbol *sym,
 static struct token *ignore_attribute(struct token *token, struct symbol *attr, struct decl_state *ctx)
 {
 	struct expression *expr = NULL;
-	if (match_op(token, '('))
-		token = parens_expression(token, &expr, "in attribute");
+	if (match_op(token, '(')) {
+		/* Accept an empty argument list, e.g. __attribute__((nonnull())) */
+		if (match_op(token->next, ')'))
+			token = token->next->next;
+		else
+			token = parens_expression(token, &expr, "in attribute");
+	}
 	return token;
 }
 
@@ -1362,8 +1367,12 @@ static struct token *recover_unknown_attribute(struct token *token)
 	if (Wunknown_attribute)
 		warning(token->pos, "unknown attribute '%s'", show_ident(token->ident));
 	token = token->next;
-	if (match_op(token, '('))
-		token = parens_expression(token, &expr, "in attribute");
+	if (match_op(token, '(')) {
+		if (match_op(token->next, ')'))
+			token = token->next->next;
+		else
+			token = parens_expression(token, &expr, "in attribute");
+	}
 	return token;
 }
 
