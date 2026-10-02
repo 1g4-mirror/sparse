@@ -22,10 +22,11 @@ as mixing pointers to user address space and pointers to kernel address space.
 Maintainer
 ----------
 
-1. 2006 - 2009, Josh Triplett
-2. 2009 - 2018, Chris Li
-3. 2018 - 2025, Luc Van Oostenryck
-4. 2025 - present, Chris Li
+1. 2006/09 - 2008/08, Josh Triplett
+2. 2008/12 - 2017/02, Chris Li
+3. 2017/03 - 2024/02, Luc Van Oostenryck
+4. 2025/09 - 2025/10, Chris Li
+5. 2026/09 - present, Bart Van Assche
 
 Getting Sparse
 --------------
@@ -36,7 +37,7 @@ repository with the command::
 	git clone git://git.kernel.org/pub/scm/devel/sparse/sparse.git
 
 You can also `browse the Git repository <https://git.kernel.org/pub/scm/devel/sparse/sparse.git>`_
-or use the mirror at https://github.com/lucvoo/sparse.
+or use the mirror at https://github.com/bvanassche/sparse.
 The tarballs of released versions of Sparse and their signatures can be found at
 https://www.kernel.org/pub/software/devel/sparse/dist/.
 
