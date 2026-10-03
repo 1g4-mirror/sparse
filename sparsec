@@ -45,7 +45,7 @@ case "$(uname -s)" in
 	;;
 esac
 
-$DIRNAME/sparse-llvm $SPARSEOPTS | $LLC ${LLC_ARCH_OPTS} | as -o $TMPFILE
+$DIRNAME/sparse-llvm $SPARSEOPTS | $LLC ${LLC_ARCH_OPTS} -filetype=obj -o $TMPFILE
 
 if [ $NEED_LINK -eq 1 ]; then
 	if [ -z $OUTFILE ]; then
