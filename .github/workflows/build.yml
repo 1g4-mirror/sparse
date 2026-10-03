@@ -1,0 +1,36 @@
+# See also https://docs.github.com/en/actions/learn-github-actions/workflow-syntax-for-github-actions
+
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            mode: regular
+          - os: ubuntu-latest
+            mode: asan
+
+    env:
+      MODE: ${{ matrix.mode }}
+
+    steps:
+    - uses: actions/checkout@main
+
+    - name: install
+      run: sudo bash -c "MODE=$MODE ci/install.sh"
+
+    - name: build
+      run: ci/build.sh
+
+    - name: test
+      run: ci/test.sh
