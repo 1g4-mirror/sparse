@@ -26,6 +26,17 @@ struct function {
 	LLVMModuleRef			module;
 };
 
+static LLVMContextRef context;
+
+static inline LLVMValueRef const_string(const char *str, size_t len)
+{
+#if LLVM_VERSION_MAJOR > 18
+	return LLVMConstStringInContext2(context, str, len, true);
+#else
+	return LLVMConstStringInContext(context, str, len, true);
+#endif
+}
+
 static LLVMTypeRef symbol_type(struct symbol *sym);
 
 static LLVMTypeRef func_return_type(struct symbol *sym)
@@ -96,7 +107,7 @@ static LLVMTypeRef sym_struct_type(struct symbol *sym)
 	unsigned nr = 0;
 
 	snprintf(buffer, sizeof(buffer), "struct.%s", sym->ident ? sym->ident->name : "anno");
-	ret = LLVMStructCreateNamed(LLVMGetGlobalContext(), buffer);
+	ret = LLVMStructCreateNamed(context, buffer);
 	/* set ->aux to avoid recursion */
 	sym->aux = ret;
 
@@ -126,9 +137,9 @@ static LLVMTypeRef sym_union_type(struct symbol *sym)
 	 */
 	union_size = sym->bit_size / 8;
 
-	elements = LLVMArrayType(LLVMInt8Type(), union_size);
+	elements = LLVMArrayType(LLVMInt8TypeInContext(context), union_size);
 
-	return LLVMStructType(&elements, 1, 0 /* packed? */);
+	return LLVMStructTypeInContext(context, &elements, 1, 0 /* packed? */);
 }
 
 static LLVMTypeRef sym_ptr_type(struct symbol *sym)
@@ -137,7 +148,7 @@ static LLVMTypeRef sym_ptr_type(struct symbol *sym)
 
 	/* 'void *' is treated like 'char *' */
 	if (is_void_type(sym->ctype.base_type))
-		type = LLVMInt8Type();
+		type = LLVMInt8TypeInContext(context);
 	else
 		type = symbol_type(sym->ctype.base_type);
 
@@ -151,13 +162,13 @@ static LLVMTypeRef sym_basetype_type(struct symbol *sym)
 	if (is_float_type(sym)) {
 		switch (sym->bit_size) {
 		case 32:
-			ret = LLVMFloatType();
+			ret = LLVMFloatTypeInContext(context);
 			break;
 		case 64:
-			ret = LLVMDoubleType();
+			ret = LLVMDoubleTypeInContext(context);
 			break;
 		case 80:
-			ret = LLVMX86FP80Type();
+			ret = LLVMX86FP80TypeInContext(context);
 			break;
 		default:
 			die("invalid bit size %d for type %d", sym->bit_size, sym->type);
@@ -166,22 +177,22 @@ static LLVMTypeRef sym_basetype_type(struct symbol *sym)
 	} else {
 		switch (sym->bit_size) {
 		case -1:
-			ret = LLVMVoidType();
+			ret = LLVMVoidTypeInContext(context);
 			break;
 		case 1:
-			ret = LLVMInt1Type();
+			ret = LLVMInt1TypeInContext(context);
 			break;
 		case 8:
-			ret = LLVMInt8Type();
+			ret = LLVMInt8TypeInContext(context);
 			break;
 		case 16:
-			ret = LLVMInt16Type();
+			ret = LLVMInt16TypeInContext(context);
 			break;
 		case 32:
-			ret = LLVMInt32Type();
+			ret = LLVMInt32TypeInContext(context);
 			break;
 		case 64:
-			ret = LLVMInt64Type();
+			ret = LLVMInt64TypeInContext(context);
 			break;
 		default:
 			die("invalid bit size %d for type %d", sym->bit_size, sym->type);
@@ -205,7 +216,7 @@ static LLVMTypeRef symbol_type(struct symbol *sym)
 
 	switch (sym->type) {
 	case SYM_BITFIELD:
-		ret = LLVMIntType(sym->bit_size);
+		ret = LLVMIntTypeInContext(context, sym->bit_size);
 		break;
 	case SYM_RESTRICT:
 	case SYM_ENUM:
@@ -244,10 +255,10 @@ static LLVMTypeRef insn_symbol_type(struct instruction *insn)
 		return symbol_type(insn->type);
 
 	switch (insn->size) {
-		case 8:		return LLVMInt8Type();
-		case 16:	return LLVMInt16Type();
-		case 32:	return LLVMInt32Type();
-		case 64:	return LLVMInt64Type();
+		case 8:		return LLVMInt8TypeInContext(context);
+		case 16:	return LLVMInt16TypeInContext(context);
+		case 32:	return LLVMInt32TypeInContext(context);
+		case 64:	return LLVMInt64TypeInContext(context);
 
 		default:
 			die("invalid bit size %d", insn->size);
@@ -316,14 +327,14 @@ static LLVMValueRef get_sym_value(LLVMModuleRef module, struct symbol *sym)
 			const char *s = expr->string->data;
 			size_t len = expr->string->length;
 #if LLVM_VERSION_MAJOR <= 14
-			LLVMValueRef indices[] = { LLVMConstInt(LLVMInt64Type(), 0, 0), LLVMConstInt(LLVMInt64Type(), 0, 0) };
+			LLVMValueRef indices[] = { LLVMConstInt(LLVMInt64TypeInContext(context), 0, 0), LLVMConstInt(LLVMInt64TypeInContext(context), 0, 0) };
 #endif
 			LLVMValueRef data;
 
-			data = LLVMAddGlobal(module, LLVMArrayType(LLVMInt8Type(), len), ".str");
+			data = LLVMAddGlobal(module, LLVMArrayType(LLVMInt8TypeInContext(context), len), ".str");
 			LLVMSetLinkage(data, LLVMPrivateLinkage);
 			LLVMSetGlobalConstant(data, 1);
-			LLVMSetInitializer(data, LLVMConstString(s, len, true));
+			LLVMSetInitializer(data, const_string(s, len));
 
 #if LLVM_VERSION_MAJOR > 14
 			result = data;
@@ -357,7 +368,7 @@ static LLVMValueRef constant_value(unsigned long long val, LLVMTypeRef dtype)
 	switch (LLVMGetTypeKind(dtype)) {
 	case LLVMPointerTypeKind:
 		if (val != 0) {	 // for example: ... = (void*) 0x123;
-			LLVMTypeRef itype = LLVMIntType(bits_in_pointer);
+			LLVMTypeRef itype = LLVMIntTypeInContext(context, bits_in_pointer);
 			result = LLVMConstInt(itype, val, 1);
 			result = LLVMConstIntToPtr(result, dtype);
 		} else {
@@ -443,7 +454,7 @@ static LLVMValueRef value_to_ivalue(struct function *fn, struct symbol *ctype, L
 	LLVMTypeRef dtype = symbol_type(ctype);
 
 	if (LLVMGetTypeKind(LLVMTypeOf(val)) == LLVMPointerTypeKind) {
-		LLVMTypeRef dtype = LLVMIntType(bits_in_pointer);
+		LLVMTypeRef dtype = LLVMIntTypeInContext(context, bits_in_pointer);
 		val = LLVMBuildPtrToInt(fn->builder, val, dtype, name);
 	}
 	if (ctype && is_int_type(ctype)) {
@@ -505,7 +516,7 @@ static LLVMValueRef calc_gep(LLVMBuilderRef builder, LLVMValueRef base, LLVMValu
 {
 	LLVMTypeRef type = LLVMTypeOf(base);
 	unsigned int as = LLVMGetPointerAddressSpace(type);
-	LLVMTypeRef bytep = LLVMPointerType(LLVMInt8Type(), as);
+	LLVMTypeRef bytep = LLVMPointerType(LLVMInt8TypeInContext(context), as);
 	LLVMValueRef addr;
 	const char *name = LLVMGetValueName(off);
 
@@ -718,7 +729,7 @@ static LLVMValueRef calc_memop_addr(struct function *fn, struct instruction *ins
 	unsigned int as;
 
 	/* int type large enough to hold a pointer */
-	int_type = LLVMIntType(bits_in_pointer);
+	int_type = LLVMIntTypeInContext(context, bits_in_pointer);
 	off = LLVMConstInt(int_type, insn->offset, 0);
 
 	/* convert src to the effective pointer type */
@@ -765,7 +776,7 @@ static void output_op_store(struct function *fn, struct instruction *insn)
 
 static LLVMValueRef bool_value(struct function *fn, LLVMValueRef value)
 {
-	if (LLVMTypeOf(value) != LLVMInt1Type())
+	if (LLVMTypeOf(value) != LLVMInt1TypeInContext(context))
 		value = LLVMBuildIsNotNull(fn->builder, value, LLVMGetValueName(value));
 
 	return value;
@@ -1171,7 +1182,7 @@ static void output_fn(LLVMModuleRef module, struct entrypoint *ep)
 	LLVMSetFunctionCallConv(function.fn, LLVMCCallConv);
 	LLVMSetLinkage(function.fn, function_linkage(sym));
 
-	function.builder = LLVMCreateBuilder();
+	function.builder = LLVMCreateBuilderInContext(context);
 
 	/* give a name to each argument */
 	nr_args = symbol_list_size(base_type->arguments);
@@ -1191,7 +1202,7 @@ static void output_fn(LLVMModuleRef module, struct entrypoint *ep)
 		char bbname[32];
 
 		sprintf(bbname, "L%d", nr_bb++);
-		bbr = LLVMAppendBasicBlock(function.fn, bbname);
+		bbr = LLVMAppendBasicBlockInContext(context, function.fn, bbname);
 
 		bb->priv = bbr;
 	}
@@ -1259,7 +1270,7 @@ static LLVMValueRef output_data(LLVMModuleRef module, struct symbol *sym)
 			const char *s = initializer->string->data;
 			size_t len = initializer->string->length;
 
-			initial_value = LLVMConstString(s, len, true);
+			initial_value = const_string(s, len);
 			break;
 		}
 		default:
@@ -1384,7 +1395,8 @@ int main(int argc, char **argv)
 
 	symlist = sparse_initialize(argc, argv, &filelist);
 
-	module = LLVMModuleCreateWithName("sparse");
+	context = LLVMContextCreate();
+	module = LLVMModuleCreateWithNameInContext("sparse", context);
 	set_target(module);
 
 	compile(module, symlist);
@@ -1404,6 +1416,7 @@ int main(int argc, char **argv)
 
 out:
 	LLVMDisposeModule(module);
+	LLVMContextDispose(context);
 
 	report_stats();
 	return ret;
