@@ -11,7 +11,7 @@
  */
 
 /* Silly type-safety check ;) */
-#define CHECK_TYPE(head,ptr)		(void)(&(ptr) == &(head)->list[0])
+#define CHECK_TYPE(head,ptr)		(void)sizeof(&(ptr) == &(head)->list[0])
 #define PTRLIST_TYPE(head)		__typeof__((head)->list[0])
 #define VRFY_PTR_LIST(head)		(void)(sizeof((head)->list[0]))
 
@@ -163,15 +163,19 @@ extern void __free_ptr_list(struct ptr_list **);
 
 
 #define PTR_NEXT(ptr, __head, __list, __nr, PTR_ENTRY)			\
-	do {								\
+	for (;;) {							\
 		if (__nr < __list->nr) {				\
 			ptr = PTR_ENTRY(__list,__nr);			\
 			__nr++;						\
+			if (__list->rm && !ptr)				\
+				continue;				\
 			break;						\
 		}							\
 		ptr = NULL;						\
 		__nr = 0;						\
-	} while ((__list = __list->next) != __head)			\
+		if ((__list = __list->next) == __head)			\
+			break;						\
+	}			\
 
 #define DO_PREPARE(head, ptr, __head, __list, __nr, PTR_ENTRY)		\
 	do {								\
@@ -224,7 +228,7 @@ extern void __free_ptr_list(struct ptr_list **);
 	__typeof__(head) __list = __head;				\
 	__typeof__(head) __name = __head;				\
 	int __nr;							\
-	if (!head)							\
+	if (!__head)							\
 		break;							\
 	do {								\
 		__list = __list->prev;					\
@@ -255,6 +259,8 @@ extern void __free_ptr_list(struct ptr_list **);
 	__inside##new:							\
 		while (--__newnr >= 0) {				\
 			new = PTR_ENTRY(__newlist,__newnr);		\
+			if (__newlist->rm && !new)			\
+				continue;		\
 
 #define DO_THIS_ADDRESS(ptr, __head, __list, __nr)			\
 	(&__list->list[__nr])

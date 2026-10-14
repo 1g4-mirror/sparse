@@ -165,19 +165,21 @@ void *ptr_list_nth_entry(struct ptr_list *list, unsigned int idx)
 int linearize_ptr_list(struct ptr_list *head, void **arr, int max)
 {
 	int nr = 0;
-	if (head && max > 0) {
+	if (head && max >= 0) {
 		struct ptr_list *list = head;
 
 		do {
-			int i = list->nr;
-			nr += i;
-			if (max == 0)
-				continue;
-			if (i > max) 
-				i = max;
-			memcpy(arr, list->list, i*sizeof(void *));
-			arr += i;
-			max -= i;
+			int i;
+			for (i = 0; i < list->nr; i++) {
+				void *ptr = list->list[i];
+				if (list->rm && !ptr)
+					continue;
+				nr++;
+				if (max > 0) {
+					*arr++ = ptr;
+					max--;
+				}
+			}
 		} while ((list = list->next) != head);
 	}
 	return nr;
@@ -247,6 +249,15 @@ void split_ptr_list_head(struct ptr_list *head)
 	newlist->nr = nr;
 	memcpy(newlist->list, head->list + old, nr * sizeof(void *));
 	memset(head->list + old, 0xf0, nr * sizeof(void *));
+	if (head->rm) {
+		int i, rm = 0;
+		for (i = 0; i < nr; i++) {
+			if (!newlist->list[i])
+				rm++;
+		}
+		newlist->rm = rm;
+		head->rm -= rm;
+	}
 }
 
 ///
@@ -409,10 +420,18 @@ void * delete_ptr_list_last(struct ptr_list **head)
 
 	if (!first)
 		return NULL;
-	last = first->prev;
-	if (last->nr)
-		ptr = last->list[--last->nr];
-	if (last->nr <=0) {
+	while ((last = first->prev)->nr == 0) {
+		if (last == first) {
+			*head = NULL;
+			__free_ptrlist(last);
+			return NULL;
+		}
+		first->prev = last->prev;
+		last->prev->next = first;
+		__free_ptrlist(last);
+	}
+	ptr = last->list[--last->nr];
+	if (last->nr <= 0) {
 		first->prev = last->prev;
 		last->prev->next = first;
 		if (last == first)
