@@ -2,7 +2,7 @@
 #define BITMAP_H
 
 #define BITS_IN_LONG	(sizeof(unsigned long)*8)
-#define LONGS(x)	((x + BITS_IN_LONG - 1) & -BITS_IN_LONG)
+#define LONGS(x)	(((x) + BITS_IN_LONG - 1) / BITS_IN_LONG)
 
 /* Every bitmap gets its own type */
 #define DECLARE_BITMAP(name, x) unsigned long name[LONGS(x)]
