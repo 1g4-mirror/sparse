@@ -311,7 +311,9 @@ static LLVMValueRef get_sym_value(LLVMModuleRef module, struct symbol *sym)
 		case EXPR_STRING: {
 			const char *s = expr->string->data;
 			size_t len = expr->string->length;
+#if LLVM_VERSION_MAJOR <= 14
 			LLVMValueRef indices[] = { LLVMConstInt(LLVMInt64Type(), 0, 0), LLVMConstInt(LLVMInt64Type(), 0, 0) };
+#endif
 			LLVMValueRef data;
 
 			data = LLVMAddGlobal(module, LLVMArrayType(LLVMInt8Type(), len), ".str");
@@ -320,7 +322,7 @@ static LLVMValueRef get_sym_value(LLVMModuleRef module, struct symbol *sym)
 			LLVMSetInitializer(data, LLVMConstString(s, len, true));
 
 #if LLVM_VERSION_MAJOR > 14
-			result = LLVMConstGEP2(LLVMTypeOf(data), data, indices, ARRAY_SIZE(indices));
+			result = data;
 #else
 			result = LLVMConstGEP(data, indices, ARRAY_SIZE(indices));
 #endif
