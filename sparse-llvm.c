@@ -10,6 +10,7 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <assert.h>
@@ -53,6 +54,7 @@ static LLVMTypeRef sym_func_type(struct symbol *sym)
 	int n_arg = symbol_list_size(sym->arguments);
 	LLVMTypeRef *arg_type = calloc(n_arg, sizeof(LLVMTypeRef));
 	LLVMTypeRef ret_type = func_return_type(sym);
+	LLVMTypeRef fn_type;
 	struct symbol *arg;
 	int idx = 0;
 
@@ -62,7 +64,9 @@ static LLVMTypeRef sym_func_type(struct symbol *sym)
 		arg_type[idx++] = symbol_type(arg_sym);
 	} END_FOR_EACH_PTR(arg);
 
-	return LLVMFunctionType(ret_type, arg_type, n_arg, sym->variadic);
+	fn_type = LLVMFunctionType(ret_type, arg_type, n_arg, sym->variadic);
+	free(arg_type);
+	return fn_type;
 }
 
 static LLVMTypeRef sym_array_type(struct symbol *sym)
@@ -858,6 +862,7 @@ static void output_op_call(struct function *fn, struct instruction *insn)
 	(void) fntype;
 	target = LLVMBuildCall(fn->builder, func, args, n_arg, name);
 #endif
+	free(args);
 
 	insn->target->priv = target;
 }
@@ -1223,6 +1228,8 @@ static void output_fn(LLVMModuleRef module, struct entrypoint *ep)
 			} END_FOR_EACH_PTR(phi);
 		} END_FOR_EACH_PTR(insn);
 	} END_FOR_EACH_PTR(bb);
+
+	LLVMDisposeBuilder(function.builder);
 }
 
 static LLVMValueRef output_data(LLVMModuleRef module, struct symbol *sym)
@@ -1372,6 +1379,7 @@ int main(int argc, char **argv)
 	struct string_list *filelist = NULL;
 	struct symbol_list *symlist;
 	LLVMModuleRef module;
+	int ret = 0;
 	char *file;
 
 	symlist = sparse_initialize(argc, argv, &filelist);
@@ -1383,8 +1391,10 @@ int main(int argc, char **argv)
 
 	FOR_EACH_PTR(filelist, file) {
 		symlist = sparse(file);
-		if (die_if_error)
-			return 1;
+		if (die_if_error) {
+			ret = 1;
+			goto out;
+		}
 		compile(module, symlist);
 	} END_FOR_EACH_PTR(file);
 
@@ -1392,8 +1402,9 @@ int main(int argc, char **argv)
 
 	LLVMWriteBitcodeToFD(module, STDOUT_FILENO, 0, 0);
 
+out:
 	LLVMDisposeModule(module);
 
 	report_stats();
-	return 0;
+	return ret;
 }
