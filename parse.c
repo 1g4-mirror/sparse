@@ -1595,14 +1595,17 @@ static struct token *declaration_specifiers(struct token *token, struct decl_sta
 				rank = -2;
 			if (s->op->set & (Set_Short|Set_Float)) {
 				rank = -1;
-			} else if (s->op->set & Set_Long && rank++) {
-				if (class == CReal) {
-					specifier_conflict(token->pos,
-							   Set_Vlong,
-							   &double_ident);
-					break;
+			} else if (s->op->set & Set_Long) {
+				if (rank) {
+					if (class == CReal) {
+						specifier_conflict(token->pos,
+								   Set_Vlong,
+								   &double_ident);
+						break;
+					}
+					seen |= Set_Vlong;
 				}
-				seen |= Set_Vlong;
+				rank++;
 			}
 		}
 		token = token->next;
