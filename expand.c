@@ -36,6 +36,7 @@
 
 #include "lib.h"
 #include "allocate.h"
+#include "bits.h"
 #include "parse.h"
 #include "token.h"
 #include "symbol.h"
@@ -80,18 +81,8 @@ static int expand_symbol_expression(struct expression *expr)
 
 static long long get_longlong(struct expression *expr)
 {
-	int no_expand = expr->ctype->ctype.modifiers & MOD_UNSIGNED;
-	long long mask = 1ULL << (expr->ctype->bit_size - 1);
-	long long value = expr->value;
-	long long ormask, andmask;
-
-	if (!(value & mask))
-		no_expand = 1;
-	andmask = mask | (mask-1);
-	ormask = ~andmask;
-	if (no_expand)
-		ormask = 0;
-	return (value & andmask) | ormask;
+	int is_signed = !(expr->ctype->ctype.modifiers & MOD_UNSIGNED);
+	return bits_extend(expr->value, expr->ctype->bit_size, is_signed);
 }
 
 void cast_value(struct expression *expr, struct symbol *newtype, struct expression *old)
@@ -99,8 +90,9 @@ void cast_value(struct expression *expr, struct symbol *newtype, struct expressi
 	struct symbol *oldtype = old->ctype;
 	int old_size = oldtype->bit_size;
 	int new_size = newtype->bit_size;
-	long long value, mask, signmask;
-	long long oldmask, oldsignmask, dropped;
+	long long value;
+	unsigned long long mask, signmask;
+	unsigned long long oldmask, oldsignmask, dropped;
 
 	if (is_float_type(newtype) || is_float_type(oldtype))
 		goto Float;
@@ -128,8 +120,8 @@ Int:
 	}
 
 	// Truncate it to the new size
-	signmask = 1ULL << (new_size-1);
-	mask = signmask | (signmask-1);
+	signmask = sign_bit(new_size);
+	mask = bits_mask(new_size);
 	expr->value = value & mask;
 
 	// Stop here unless checking for truncation
@@ -137,8 +129,8 @@ Int:
 		return;
 	
 	// Check if we dropped any bits..
-	oldsignmask = 1ULL << (old_size-1);
-	oldmask = oldsignmask | (oldsignmask-1);
+	oldsignmask = sign_bit(old_size);
+	oldmask = bits_mask(old_size);
 	dropped = oldmask & ~mask;
 
 	// OK if the bits were (and still are) purely sign bits
@@ -210,7 +202,7 @@ static int simplify_int_binop(struct expression *expr, struct symbol *ctype)
 		return 0;
 	l = left->value; r = right->value;
 	is_signed = !(ctype->ctype.modifiers & MOD_UNSIGNED);
-	mask = 1ULL << (ctype->bit_size-1);
+	mask = sign_bit(ctype->bit_size);
 	sl = l; sr = r;
 	if (is_signed && (sl & mask))
 		sl |= ~(mask-1);
@@ -244,9 +236,6 @@ static int simplify_int_binop(struct expression *expr, struct symbol *ctype)
 		break;
 
 	case SIGNED('*'):
-		v = sl * sr;
-		break;
-
 	case UNSIGNED('*'):
 		v = l * r;
 		break;
@@ -279,21 +268,21 @@ static int simplify_int_binop(struct expression *expr, struct symbol *ctype)
 
 	case SIGNED(SPECIAL_LEFTSHIFT):
 	case UNSIGNED(SPECIAL_LEFTSHIFT):
-		v = l << r;
+		v = r < 64 ? l << r : 0;
 		break; 
 
 	case SIGNED(SPECIAL_RIGHTSHIFT):
-		v = sl >> r;
+		v = sl >> (r < 63 ? r : 63);
 		break;
 
 	case UNSIGNED(SPECIAL_RIGHTSHIFT):
-		v = l >> r;
+		v = r < 64 ? l >> r : 0;
 		break;
 
 	default:
 		return 0;
 	}
-	mask = mask | (mask-1);
+	mask = bits_mask(ctype->bit_size);
 	expr->value = v & mask;
 	expr->type = EXPR_VALUE;
 	expr->taint = left->taint | right->taint;
@@ -317,7 +306,7 @@ static int simplify_cmp_binop(struct expression *expr, struct symbol *ctype)
 	if (left->type != EXPR_VALUE || right->type != EXPR_VALUE)
 		return 0;
 	l = left->value; r = right->value;
-	mask = 1ULL << (ctype->bit_size-1);
+	mask = sign_bit(ctype->bit_size);
 	sl = l; sr = r;
 	if (sl & mask)
 		sl |= ~(mask-1);
@@ -773,7 +762,7 @@ static int simplify_preop(struct expression *expr)
 	if (op->type != EXPR_VALUE)
 		return 0;
 
-	mask = 1ULL << (expr->ctype->bit_size-1);
+	mask = sign_bit(expr->ctype->bit_size);
 	v = op->value;
 	switch (expr->op) {
 	case '+': break;
@@ -786,7 +775,7 @@ static int simplify_preop(struct expression *expr)
 	case '~': v = ~v; break;
 	default: return 0;
 	}
-	mask = mask | (mask-1);
+	mask = bits_mask(expr->ctype->bit_size);
 	expr->value = v & mask;
 	expr->type = EXPR_VALUE;
 	expr->taint = op->taint;
@@ -1377,7 +1366,8 @@ static inline int bad_integer_constant_expression(struct expression *expr)
 
 static long long __get_expression_value(struct expression *expr, int strict)
 {
-	long long value, mask;
+	long long value;
+	unsigned long long mask;
 	struct symbol *ctype;
 
 	if (!expr)
@@ -1399,7 +1389,7 @@ static long long __get_expression_value(struct expression *expr, int strict)
 	}
 
 	value = expr->value;
-	mask = 1ULL << (ctype->bit_size-1);
+	mask = sign_bit(ctype->bit_size);
 
 	if (value & mask) {
 		while (ctype->type != SYM_BASETYPE)
