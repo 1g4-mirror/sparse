@@ -149,7 +149,7 @@ static void examine_modifiers(struct symbol *sym, xmlNodePtr node)
 
 	/*iterate over the 32 bit bitfield*/
 	for (i=0; i < 32; i++) {
-		if ((sym->ctype.modifiers & 1<<i) && modifiers[i])
+		if ((sym->ctype.modifiers & (1UL << i)) && modifiers[i])
 			newProp(node, modifiers[i], "1");
 	}
 }
