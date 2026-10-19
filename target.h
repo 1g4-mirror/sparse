@@ -143,12 +143,12 @@ void target_init(void);
 
 static inline int bits_to_bytes(int bits)
 {
-	return bits >= 0 ? (bits + bits_in_char - 1) / bits_in_char : -1;
+	return bits >= 0 ? ((unsigned int)bits + bits_in_char - 1) / bits_in_char : -1;
 }
 
-static inline int bytes_to_bits(int bytes)
+static inline long bytes_to_bits(long bytes)
 {
-	return bytes * bits_in_char;
+	return (unsigned long)bytes * bits_in_char;
 }
 
 static inline unsigned long array_element_offset(unsigned long base_bits, int idx)
