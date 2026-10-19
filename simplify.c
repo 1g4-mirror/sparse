@@ -632,10 +632,11 @@ static pseudo_t eval_op(int op, unsigned size, pseudo_t src1, pseudo_t src2)
 	long long left = src1->value;
 	long long right = src2->value;
 	unsigned long long ul, ur;
-	long long res, mask, bits;
+	long long res;
+	unsigned long long mask, bits;
 
-	mask = 1ULL << (size-1);
-	bits = mask | (mask-1);
+	mask = sign_bit(size);
+	bits = bits_mask(size);
 
 	if (left & mask)
 		left |= ~bits;
@@ -646,17 +647,17 @@ static pseudo_t eval_op(int op, unsigned size, pseudo_t src1, pseudo_t src2)
 
 	switch (op) {
 	case OP_NEG:
-		res = -left;
+		res = -ul;
 		break;
 	case OP_NOT:
 		res = ~ul;
 		break;
 
 	case OP_ADD:
-		res = left + right;
+		res = ul + ur;
 		break;
 	case OP_SUB:
-		res = left - right;
+		res = ul - ur;
 		break;
 	case OP_MUL:
 		res = ul * ur;
@@ -688,17 +689,17 @@ static pseudo_t eval_op(int op, unsigned size, pseudo_t src1, pseudo_t src2)
 	case OP_SHL:
 		if (ur >= size)
 			goto undef;
-		res = left << right;
+		res = ur < 64 ? ul << ur : 0;
 		break;
 	case OP_LSR:
 		if (ur >= size)
 			goto undef;
-		res = ul >> ur;
+		res = ur < 64 ? ul >> ur : 0;
 		break;
 	case OP_ASR:
 		if (ur >= size)
 			goto undef;
-		res = left >> right;
+		res = left >> (ur < 63 ? ur : 63);
 		break;
        /* Logical */
 	case OP_AND:
@@ -967,7 +968,7 @@ static int simplify_shift(struct instruction *insn, pseudo_t pseudo, long long v
 		case OP_AND:
 			// replace (A & M) >> S
 			// by      (A >> S) & (M >> S)
-			if (!constant(def->src2))
+			if (!constant(def->src2) || insn->size > 64)
 				break;
 			mask = bits_mask(insn->size - value) << value;
 			omask = def->src2->value;
@@ -991,7 +992,7 @@ static int simplify_shift(struct instruction *insn, pseudo_t pseudo, long long v
 		case OP_SHL:
 			// replace ((x << S) >> S)
 			// by      (x & (-1 >> S))
-			if (def->src2 != insn->src2)
+			if (def->src2 != insn->src2 || insn->size > 64)
 				break;
 			mask = bits_mask(insn->size - value);
 			goto replace_mask;
@@ -1003,7 +1004,7 @@ static int simplify_shift(struct instruction *insn, pseudo_t pseudo, long long v
 		switch(DEF_OPCODE(def, pseudo)) {
 		case OP_AND:
 			// simplify (A & M) << S
-			if (!constant(def->src2))
+			if (!constant(def->src2) || insn->size > 64)
 				break;
 			mask = bits_mask(insn->size) >> value;
 			omask = def->src2->value;
@@ -1017,7 +1018,7 @@ static int simplify_shift(struct instruction *insn, pseudo_t pseudo, long long v
 		case OP_LSR:
 			// replace ((x >> S) << S)
 			// by      (x & (-1 << S))
-			if (def->src2 != insn->src2)
+			if (def->src2 != insn->src2 || insn->size > 64)
 				break;
 			mask = bits_mask(insn->size - value) << value;
 			goto replace_mask;
@@ -1056,8 +1057,8 @@ replace_mask:
 
 static int simplify_mul_div(struct instruction *insn, long long value)
 {
-	unsigned long long sbit = 1ULL << (insn->size - 1);
-	unsigned long long bits = sbit | (sbit - 1);
+	unsigned long long sbit = sign_bit(insn->size);
+	unsigned long long bits = bits_mask(insn->size);
 
 	if (value == 1)
 		return replace_with_pseudo(insn, insn->src1);
@@ -1523,7 +1524,7 @@ static int simplify_constant_mask(struct instruction *insn, unsigned long long m
 		osize = def->orig_type->bit_size;
 		/* fall through */
 	oldsize:
-		omask = (1ULL << osize) - 1;
+		omask = bits_mask(osize);
 		nmask = mask & omask;
 		if (nmask == omask)
 			// the AND mask is redundant
@@ -1559,8 +1560,7 @@ static int simplify_const_rightadd(struct instruction *def, struct instruction *
 static int simplify_constant_rightside(struct instruction *insn)
 {
 	long long value = insn->src2->value;
-	long long sbit = 1ULL << (insn->size - 1);
-	long long bits = sbit | (sbit - 1);
+	unsigned long long bits = bits_mask(insn->size);
 	int changed = 0;
 
 	switch (insn->opcode) {
@@ -2138,19 +2138,19 @@ static int simplify_xor(struct instruction *insn)
 static int simplify_constant_unop(struct instruction *insn)
 {
 	long long val = insn->src1->value;
-	long long res, mask;
+	unsigned long long res, mask;
 
 	switch (insn->opcode) {
 	case OP_NOT:
 		res = ~val;
 		break;
 	case OP_NEG:
-		res = -val;
+		res = -(unsigned long long)val;
 		break;
 	case OP_SEXT:
-		mask = 1ULL << (insn->orig_type->bit_size-1);
+		mask = sign_bit(insn->orig_type->bit_size);
 		if (val & mask)
-			val |= ~(mask | (mask-1));
+			val |= ~bits_mask(insn->orig_type->bit_size);
 		/* fall through */
 	case OP_ZEXT:
 	case OP_TRUNC:
@@ -2159,8 +2159,7 @@ static int simplify_constant_unop(struct instruction *insn)
 	default:
 		return 0;
 	}
-	mask = 1ULL << (insn->size-1);
-	res &= mask | (mask-1);
+	res &= bits_mask(insn->size);
 	
 	return replace_with_value(insn, res);
 }
@@ -2329,12 +2328,12 @@ static int simplify_cast(struct instruction *insn)
 
 			insn->opcode = OP_AND;
 			mask = val->value;
-			mask &= (1ULL << size) - 1;
+			mask &= bits_mask(size);
 			insn->src2 = value_pseudo(mask);
 			return REPEAT_CSE;
 
 		case OP_SEXT:
-			if (val->value & (1 << (def->size - 1)))
+			if (val->value & sign_bit(def->size))
 				break;
 			// OK, sign bit is 0
 		case OP_ZEXT:
@@ -2426,7 +2425,7 @@ static int simplify_cast(struct instruction *insn)
 			if (size != def->orig_type->bit_size)
 				break;
 			insn->opcode = OP_AND;
-			insn->src2 = value_pseudo((1ULL << def->size) - 1);
+			insn->src2 = value_pseudo(bits_mask(def->size));
 			return replace_pseudo(insn, &insn->src1, def->src);
 		}
 		break;
