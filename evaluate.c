@@ -37,6 +37,7 @@
 #include "evaluate.h"
 #include "lib.h"
 #include "allocate.h"
+#include "bits.h"
 #include "parse.h"
 #include "token.h"
 #include "symbol.h"
@@ -601,14 +602,13 @@ static struct symbol *evaluate_ptr_add(struct expression *expr, struct symbol *i
 	if (index->type == EXPR_VALUE) {
 		struct expression *val = alloc_expression(expr->pos, EXPR_VALUE);
 		unsigned long long v = index->value, mask;
-		mask = 1ULL << (itype->bit_size - 1);
+		mask = sign_bit(itype->bit_size);
 		if (v & mask)
 			v |= -mask;
 		else
 			v &= mask - 1;
 		v *= multiply;
-		mask = 1ULL << (bits_in_pointer - 1);
-		v &= mask | (mask - 1);
+		v &= bits_mask(bits_in_pointer);
 		val->value = v;
 		val->ctype = ssize_t_ctype;
 		expr->right = val;
