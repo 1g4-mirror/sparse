@@ -1003,7 +1003,7 @@ static pseudo_t linearize_bitfield_insert(struct entrypoint *ep,
 {
 	unsigned int shift = ctype->bit_offset;
 	unsigned int size = ctype->bit_size;
-	unsigned long long mask = ((1ULL << size) - 1);
+	unsigned long long mask = bits_mask(size);
 	unsigned long long smask= bits_mask(btype->bit_size);
 
 	val = add_cast(ep, btype, ctype, OP_ZEXT, val);
