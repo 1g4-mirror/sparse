@@ -787,8 +787,10 @@ static const char *token_name_sequence(struct token *token, int endop, struct to
 
 	while (!eof_token(token) && !match_op(token, endop)) {
 		int len;
-		const char *val = token->string->data;
-		if (token_type(token) != TOKEN_STRING)
+		const char *val;
+		if (token_type(token) == TOKEN_STRING)
+			val = token->string->data;
+		else
 			val = show_token(token);
 		len = strlen(val);
 		memcpy(ptr, val, len);
