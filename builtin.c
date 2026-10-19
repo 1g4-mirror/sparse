@@ -658,7 +658,7 @@ static void declare_builtin(int stream, const struct builtin_fn *entry)
 	fun->ctype.base_type = get_ctype(entry->ret_type);
 	fun->variadic = entry->variadic;
 
-	for (i = 0; (arg = entry->args[i]); i++) {
+	for (i = 0; i < ARRAY_SIZE(entry->args) && (arg = entry->args[i]); i++) {
 		struct symbol *anode = alloc_symbol(sym->pos, SYM_NODE);
 		anode->ctype.base_type = get_ctype(arg);
 		add_symbol(&fun->arguments, anode);
