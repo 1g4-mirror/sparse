@@ -745,7 +745,7 @@ static int expand(struct token **list, struct symbol *sym)
 	struct token **tail;
 	struct token *expansion = sym->expansion;
 	int nargs = sym->arglist ? sym->arglist->count.normal : 0;
-	struct arg args[nargs];
+	struct arg args[nargs ? nargs : 1];
 
 	if (expanding->tainted) {
 		token->pos.noexpand = 1;
@@ -2285,7 +2285,7 @@ static int is_VA_ARGS_token(struct token *token)
 static void dump_macro(struct symbol *sym)
 {
 	int nargs = sym->arglist ? sym->arglist->count.normal : 0;
-	struct token *args[nargs];
+	struct token *args[nargs ? nargs : 1];
 	struct token *token;
 
 	printf("#define %s", show_ident(sym->ident));
