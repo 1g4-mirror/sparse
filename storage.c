@@ -159,12 +159,18 @@ static void vrfy_storage(struct storage_hash_list **listp)
 
 void free_storage(void)
 {
+	struct storage_hash_list *all = NULL;
 	int i;
 
 	for (i = 0; i < MAX_STORAGE_HASH; i++) {
-		vrfy_storage(storage_hash_table + i);
+		struct storage_hash *entry;
+		FOR_EACH_PTR(storage_hash_table[i], entry) {
+			add_ptr_list(&all, entry);
+		} END_FOR_EACH_PTR(entry);
 		free_ptr_list(storage_hash_table + i);
 	}
+	vrfy_storage(&all);
+	free_ptr_list(&all);
 }
 
 const char *show_storage(struct storage *s)
