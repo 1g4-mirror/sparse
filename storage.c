@@ -214,7 +214,7 @@ static struct storage * combine_storage(struct storage *src, struct storage *dst
 
 	/* Mark it unused */
 	src->type = REG_BAD;
-	src->users = NULL;
+	free_ptr_list(&src->users);
 	return dst;
 }
 
